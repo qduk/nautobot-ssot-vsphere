@@ -205,8 +205,8 @@ class DiffSyncIpAddress(DiffSyncExtras):
     """VMInterface DiffSync Model."""
 
     _modelname = "diffsync_ipaddress"
-    _identifiers = ("ip_address", "prefix_length")
-    _attributes = ("state", "mac_address", "vm_interface_name", "vm_name")
+    _identifiers = ("ip_address", "prefix_length", "mac_address")
+    _attributes = ("state", "vm_interface_name", "vm_name")
 
     ip_address: str
     prefix_length: int
@@ -219,7 +219,6 @@ class DiffSyncIpAddress(DiffSyncExtras):
     def create(cls, diffsync, ids, attrs):
         """Create IP Address in Nautobot."""
         try:
-
             virtual_machine = VirtualMachine.objects.get(name=attrs["vm_name"])
             interface = VMInterface.objects.get(
                 name=attrs["vm_interface_name"],

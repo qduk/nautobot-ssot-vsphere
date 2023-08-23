@@ -99,10 +99,13 @@ class VsphereDiffSync(DiffSyncModelAdapters):
                 # Update DiffsyncIpAddress
                 diffsync_ipaddress, _ = self.get_or_instantiate(
                     self.diffsync_ipaddress,
-                    {"ip_address": ip_address["ip_address"], "prefix_length": ip_address["prefix_length"]},
+                    {
+                        "ip_address": ip_address["ip_address"],
+                        "prefix_length": ip_address["prefix_length"],
+                        "mac_address": current_mac,
+                    },
                     {
                         "state": defaults.DEFAULT_IP_STATUS_MAP[ip_address["state"]],
-                        "mac_address": current_mac,
                         "nic": interface.get("nic"),
                         "vm_interface_name": diffsync_vminterface.name,
                         "vm_name": diffsync_vminterface.virtual_machine,
