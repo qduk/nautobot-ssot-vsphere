@@ -52,25 +52,31 @@ class VsphereDiffSync(DiffSyncModelAdapters):
 
         for virtual_machine in virtual_machines:
             virtual_machine_details = self.client.get_vm_details(virtual_machine["vm"]).json()["value"]
-            diffsync_virtualmachine, _ = self.get_or_instantiate(
-                self.diffsync_virtual_machine,
-                {"name": virtual_machine["name"]},
-                {
-                    "vcpus": virtual_machine["cpu_count"],
-                    "memory": virtual_machine["memory_size_MiB"],
-                    "disk": get_disk_total(virtual_machine_details["disks"])
-                    if virtual_machine_details.get("disks")
-                    else None,
-                    "status": defaults.DEFAULT_VM_STATUS_MAP[virtual_machine_details["power_state"]],
-                    "cluster": cluster["name"],
-                },
-            )
-            diffsync_cluster.add_child(diffsync_virtualmachine)
-            self.load_vm_interfaces(
-                vsphere_virtual_machine=virtual_machine_details,
-                vm_id=virtual_machine["vm"],
-                diffsync_virtualmachine=diffsync_virtualmachine,
-            )
+            try:
+                diffsync_virtualmachine, _ = self.get_or_instantiate(
+                    self.diffsync_virtual_machine,
+                    {"name": virtual_machine["name"]},
+                    {
+                        "vcpus": virtual_machine.get("cpu_count", None),
+                        "memory": virtual_machine.get("memory_size_MiB", None),
+                        "disk": get_disk_total(virtual_machine_details["disks"])
+                        if virtual_machine_details.get("disks")
+                        else None,
+                        "status": defaults.DEFAULT_VM_STATUS_MAP[virtual_machine_details["power_state"]],
+                        "cluster": cluster["name"],
+                    },
+                )
+                try:
+                    diffsync_cluster.add_child(diffsync_virtualmachine)
+                    self.load_vm_interfaces(
+                        vsphere_virtual_machine=virtual_machine_details,
+                        vm_id=virtual_machine["vm"],
+                        diffsync_virtualmachine=diffsync_virtualmachine,
+                    )
+                except Exception as err:
+                    self.job.log_warning(message=f"{err}")
+            except KeyError as err:
+                self.job.log_warning(message=f"{err}")
 
     def load_ip_addresses(self, vsphere_vm_interfaces, mac_address, diffsync_vminterface):
         """Load VM IP Addresses into Interfaces.
@@ -90,6 +96,8 @@ class VsphereDiffSync(DiffSyncModelAdapters):
                 self.job.log_debug(message=f"Loading IP Addresses {interface}")
                 # Convert to IP Object if IPV4 or IPV6 and add to list by version
                 addr = create_ipaddr(ip_address["ip_address"])
+                if addr.version == 6:
+                    continue
                 # Check if IPv6 is a Link Local. If it is, skip it.
                 if defaults.DEFAULT_IGNORE_LINK_LOCAL:
                     if addr.version == 6 and addr.is_link_local:
@@ -155,19 +163,19 @@ class VsphereDiffSync(DiffSyncModelAdapters):
             )
             diffsync_virtualmachine.add_child(diffsync_vminterface)
             # Get detail interfaces w/ ip's from VM - Only if VM is Enabled
-            if vsphere_virtual_machine["power_state"] == "POWERED_ON":
-                vm_interfaces = self.client.get_vm_interfaces(vm_id=vm_id)
-                # Load any IP addresses associated to this NIC/MAC
-                ipv4_addresses, ipv6_addresses = self.load_ip_addresses(
-                    vm_interfaces,
-                    nic_mac,
-                    diffsync_vminterface,
-                )
-                _ = [addrs4.append(str(addr)) for addr in ipv4_addresses]
-                _ = [addrs6.append(str(addr)) for addr in ipv6_addresses]
+        #     if vsphere_virtual_machine["power_state"] == "POWERED_ON":
+        #         vm_interfaces = self.client.get_vm_interfaces(vm_id=vm_id)
+        #         # Load any IP addresses associated to this NIC/MAC
+        #         ipv4_addresses, ipv6_addresses = self.load_ip_addresses(
+        #             vm_interfaces,
+        #             nic_mac,
+        #             diffsync_vminterface,
+        #         )
+        #         _ = [addrs4.append(str(addr)) for addr in ipv4_addresses]
+        #         _ = [addrs6.append(str(addr)) for addr in ipv6_addresses]
 
-        # Sort through all IP's on
-        self.load_primary_ip(addrs4, addrs6, diffsync_virtualmachine)
+        # # Sort through all IP's on
+        # self.load_primary_ip(addrs4, addrs6, diffsync_virtualmachine)
 
     def load_data(self):
         """Load all clusters from vSphere."""
@@ -218,11 +226,12 @@ class VsphereDiffSync(DiffSyncModelAdapters):
                     "cluster": defaults.DEFAULT_CLUSTER_NAME,
                 },
             )
-            self.load_vm_interfaces(
-                vsphere_virtual_machine=virtual_machine_details,
-                vm_id=virtual_machine["vm"],
-                diffsync_virtualmachine=diffsync_virtualmachine,
-            )
+            # Commenting out for testing
+            # self.load_vm_interfaces(
+            #     vsphere_virtual_machine=virtual_machine_details,
+            #     vm_id=virtual_machine["vm"],
+            #     diffsync_virtualmachine=diffsync_virtualmachine,
+            # )
 
     def load(self):
         """Load data from vSphere."""
