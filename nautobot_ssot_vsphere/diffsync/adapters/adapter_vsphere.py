@@ -163,19 +163,19 @@ class VsphereDiffSync(DiffSyncModelAdapters):
             )
             diffsync_virtualmachine.add_child(diffsync_vminterface)
             # Get detail interfaces w/ ip's from VM - Only if VM is Enabled
-        #     if vsphere_virtual_machine["power_state"] == "POWERED_ON":
-        #         vm_interfaces = self.client.get_vm_interfaces(vm_id=vm_id)
-        #         # Load any IP addresses associated to this NIC/MAC
-        #         ipv4_addresses, ipv6_addresses = self.load_ip_addresses(
-        #             vm_interfaces,
-        #             nic_mac,
-        #             diffsync_vminterface,
-        #         )
-        #         _ = [addrs4.append(str(addr)) for addr in ipv4_addresses]
-        #         _ = [addrs6.append(str(addr)) for addr in ipv6_addresses]
+            if vsphere_virtual_machine["power_state"] == "POWERED_ON":
+                vm_interfaces = self.client.get_vm_interfaces(vm_id=vm_id)
+                # Load any IP addresses associated to this NIC/MAC
+                ipv4_addresses, ipv6_addresses = self.load_ip_addresses(
+                    vm_interfaces,
+                    nic_mac,
+                    diffsync_vminterface,
+                )
+                _ = [addrs4.append(str(addr)) for addr in ipv4_addresses]
+                _ = [addrs6.append(str(addr)) for addr in ipv6_addresses]
 
-        # # Sort through all IP's on
-        # self.load_primary_ip(addrs4, addrs6, diffsync_virtualmachine)
+        # Sort through all IP's on
+        self.load_primary_ip(addrs4, addrs6, diffsync_virtualmachine)
 
     def load_data(self):
         """Load all clusters from vSphere."""
@@ -227,11 +227,11 @@ class VsphereDiffSync(DiffSyncModelAdapters):
                 },
             )
             # Commenting out for testing
-            # self.load_vm_interfaces(
-            #     vsphere_virtual_machine=virtual_machine_details,
-            #     vm_id=virtual_machine["vm"],
-            #     diffsync_virtualmachine=diffsync_virtualmachine,
-            # )
+            self.load_vm_interfaces(
+                vsphere_virtual_machine=virtual_machine_details,
+                vm_id=virtual_machine["vm"],
+                diffsync_virtualmachine=diffsync_virtualmachine,
+            )
 
     def load(self):
         """Load data from vSphere."""
