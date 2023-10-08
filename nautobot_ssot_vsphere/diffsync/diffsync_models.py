@@ -236,14 +236,22 @@ class DiffSyncIpAddress(DiffSyncExtras):
             diffsync_vm = diffsync.get(diffsync.diffsync_virtual_machine, {"name": virtual_machine.name})
             if ids["ip_address"] == diffsync_vm.primary_ip4:
                 setattr(interface.parent, primary_ip_attr, ip_address)
-                interface.parent.save()
-                interface.save()
+                try:
+                    interface.parent.save()
+                    interface.save()
+                # Find accurate exception
+                except E:
+                    self.log_warning(message=f"Dupliucate primary ip of {ids['ip_address']}")
                 diffsync.job.log_debug(message=f"{primary_ip_attr} IP Set to {ip_address} on interface {interface}")
 
             if ids["ip_address"] == diffsync_vm.primary_ip6:
                 setattr(interface.parent, primary_ip_attr, ip_address)
-                interface.parent.save()
-                interface.save()
+                try:
+                    interface.parent.save()
+                    interface.save()
+                # Find accurate exception
+                except E:
+                    self.log_warning(message=f"Dupliucate primary ip of {ids['ip_address']}")
                 diffsync.job.log_debug(message=f"{primary_ip_attr} IP Set to {ip_address} on interface {interface}")
 
             tag_object(ip_address)
