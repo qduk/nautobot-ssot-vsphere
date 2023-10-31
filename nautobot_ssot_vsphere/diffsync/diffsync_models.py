@@ -231,28 +231,30 @@ class DiffSyncIpAddress(DiffSyncExtras):
             interface.ip_addresses.add(ip_address)
             interface.validated_save()
 
-            # Set Virtual Machine Primary IP through IP - > Interface - > VM
-            primary_ip_attr = f"primary_ip{ip_address.address.version}"
-            diffsync_vm = diffsync.get(diffsync.diffsync_virtual_machine, {"name": virtual_machine.name})
-            if ids["ip_address"] == diffsync_vm.primary_ip4:
-                setattr(interface.parent, primary_ip_attr, ip_address)
-                try:
-                    interface.parent.save()
-                    interface.save()
-                # Find accurate exception
-                except E:
-                    self.log_warning(message=f"Dupliucate primary ip of {ids['ip_address']}")
-                diffsync.job.log_debug(message=f"{primary_ip_attr} IP Set to {ip_address} on interface {interface}")
+            # # Set Virtual Machine Primary IP through IP - > Interface - > VM
+            # primary_ip_attr = f"primary_ip{ip_address.address.version}"
+            # diffsync_vm = diffsync.get(diffsync.diffsync_virtual_machine, {"name": virtual_machine.name})
+            # if ids["ip_address"] == diffsync_vm.primary_ip4:
+            #     setattr(interface.parent, primary_ip_attr, ip_address)
+            #     try:
+            #         interface.parent.save()
+            #         interface.save()
+            #         tag_object(ip_address)
+            #     except Exception:
+            #         diffsync.job.log_warning(
+            #             message=f"IP address {ids['ip_address']} already assigned as Primary IP for another VM."
+            #         )
 
-            if ids["ip_address"] == diffsync_vm.primary_ip6:
-                setattr(interface.parent, primary_ip_attr, ip_address)
-                try:
-                    interface.parent.save()
-                    interface.save()
-                # Find accurate exception
-                except E:
-                    self.log_warning(message=f"Dupliucate primary ip of {ids['ip_address']}")
-                diffsync.job.log_debug(message=f"{primary_ip_attr} IP Set to {ip_address} on interface {interface}")
+            # if ids["ip_address"] == diffsync_vm.primary_ip6:
+            #     setattr(interface.parent, primary_ip_attr, ip_address)
+            #     try:
+            #         interface.parent.save()
+            #         interface.save()
+            #         tag_object(ip_address)
+            #     except Exception:
+            #         diffsync.job.log_debug(
+            #             message=f"IP address {ids['ip_address']} already assigned as Primary IP for another VM."
+            #         )
 
             tag_object(ip_address)
 
