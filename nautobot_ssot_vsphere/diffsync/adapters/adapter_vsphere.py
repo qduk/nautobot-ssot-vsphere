@@ -104,12 +104,16 @@ class VsphereDiffSync(DiffSyncModelAdapters):
                         self.job.log_debug(message=f"Skipping Link Local Address: {ip_address}")
                         continue
                 _ = ipv4_addresses.append(addr) if addr.version == 4 else ipv6_addresses.append(addr)
+                if addr.version == 6:
+                    prefix_length = "128"
+                else:
+                    prefix_length = "32"
                 # Update DiffsyncIpAddress
                 diffsync_ipaddress, _ = self.get_or_instantiate(
                     self.diffsync_ipaddress,
                     {
                         "ip_address": ip_address["ip_address"],
-                        "prefix_length": ip_address["prefix_length"],
+                        "prefix_length": prefix_length,
                         "mac_address": current_mac,
                     },
                     {

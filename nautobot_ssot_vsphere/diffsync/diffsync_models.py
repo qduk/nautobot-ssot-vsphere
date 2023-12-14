@@ -231,7 +231,8 @@ class DiffSyncIpAddress(DiffSyncExtras):
             interface.ip_addresses.add(ip_address)
             interface.validated_save()
 
-            # # Set Virtual Machine Primary IP through IP - > Interface - > VM
+            # TODO: Getting atomic error when handling the exceptions. Need to figure it out.
+            # Set Virtual Machine Primary IP through IP - > Interface - > VM
             # primary_ip_attr = f"primary_ip{ip_address.address.version}"
             # diffsync_vm = diffsync.get(diffsync.diffsync_virtual_machine, {"name": virtual_machine.name})
             # if ids["ip_address"] == diffsync_vm.primary_ip4:
