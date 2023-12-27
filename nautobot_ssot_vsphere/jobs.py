@@ -182,4 +182,106 @@ class VspherecDataSource(DataSource, Job):
         self.log_success(message="Sync complete.")
 
 
+# pylint:disable=too-few-public-methods
+class VspherecDataSourceHosts(DataSource, Job):
+    """Job syncing hosts from vSphere to Nautobot."""
+
+    debug = BooleanVar(description="Enable for more verbose debug logging")
+
+    class Meta:
+        """Metadata about this Job."""
+
+        name = "VMWare vSphere Hosts ⟹ Nautobot"
+        data_source = "VMWare vSphere"
+        data_source_icon = static("nautobot_ssot_vsphere/vmware.png")
+        description = "Sync data from VMWare vSphere Hosts into Nautobot."
+        field_order = (
+            "debug",
+            "sync_vsphere_tagged_only",
+            "dry_run",
+        )
+
+    @classmethod
+    def data_mappings(cls):
+        """List describing the data mappings involved in this DataSource."""
+        return (DataMapping("Hosts", None, "ClusterGroup", reverse("dcim:device")),)
+
+    @classmethod
+    def config_information(cls):
+        """Configuration of this DataSource."""
+        return {
+            "vSphere URI": defaults.VSPHERE_URI,
+            "vSphere Username": defaults.VSPHERE_USERNAME,
+            "vSphere Verify SSL": "False" if not defaults.VSPHERE_VERIFY_SSL else "True",
+        }
+
+    def log_debug(self, message):
+        """Conditionally log a debug message."""
+        if self.kwargs.get("debug"):
+            super().log_debug(message)
+
+    def sync_data(self):
+        """Sync a device data from vSphere into Nautobot."""
+        dry_run = self.kwargs["dry_run"]
+        debug_mode = self.kwargs["debug"]
+
+        if defaults.DEFAULT_USE_CLUSTERS:
+            cluster_filter_object = (
+                Cluster.objects.get(pk=self.kwargs["cluster_filter"]) if self.kwargs["cluster_filter"] else None
+            )
+        else:
+            self.log_info(message="`DEFAULT_USE_CLUSTERS` is set to `False`")
+            if defaults.ENFORCE_CLUSTER_GROUP_TOP_LEVEL:
+                self.log_failure(message="Cannot `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` and disable `DEFAULT_USE_CLUSTERS`")
+                self.log_info(
+                    message="Set `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` to `False` or `DEFAULT_USE_CLUSTERS` to `True`"
+                )
+            cluster_filter_object = None
+
+        options = f"`Debug`: {debug_mode}, `Dry Run`: {dry_run},`Cluster Filter`: {cluster_filter_object}"  # NOQA
+        self.log_info(message=f"Starting job with the following options: {options}")
+        vsphere_source = VsphereDiffSync(
+            job=self, sync=self.sync, client=VsphereClient(), cluster_filter=cluster_filter_object
+        )
+
+        self.log_info(message="Loading current data from vSphere...")
+        vsphere_source.load_hosts()
+
+        dest = NautobotDiffSync(
+            job=self,
+            sync=self.sync,
+            sync_vsphere_tagged_only=tagged_only,
+            cluster_filter=cluster_filter_object,
+        )
+
+        self.log_info(message="Loading current data from Nautobot...")
+        dest.load()
+
+        self.log_info(message="Calculating diffs...")
+        flags = DiffSyncFlags.CONTINUE_ON_FAILURE
+
+        diff = dest.diff_from(vsphere_source, flags=flags)
+        self.log_debug(message=f"Diff: {diff.dict()}")
+
+        self.sync.diff = diff.dict()
+        self.sync.save()
+        create = diff.summary().get("create")
+        update = diff.summary().get("update")
+        delete = diff.summary().get("delete")
+        no_change = diff.summary().get("no-change")
+        self.log_info(
+            message=f"DiffSync Summary: Create: {create}, Update: {update}, Delete: {delete}, No Change: {no_change}"
+        )
+        if not dry_run:
+            self.log_info(message="Syncing from vSphere to Nautobot")
+            try:
+                dest.sync_from(vsphere_source, flags=flags)
+            except ObjectNotCreated as err:
+                self.log_warning(f"Unable to create object. {err}")
+            # except Exception as err:  # Keep it general, as final resort
+            #     self.log_warning(f"Error occured. {err}")
+
+        self.log_success(message="Sync complete.")
+
+
 jobs = [VspherecDataSource]

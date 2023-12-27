@@ -7,6 +7,9 @@ from typing import List
 from nautobot_ssot_vsphere.diffsync import defaults
 from nautobot_ssot_vsphere.diffsync.adapters.shared import DiffSyncModelAdapters
 from nautobot_ssot_vsphere.utilities.vsphere_client import VsphereClient
+from nautobot.virtualization.models import (
+    Cluster,
+)
 
 
 def create_ipaddr(address: str):
@@ -36,6 +39,21 @@ class VsphereDiffSync(DiffSyncModelAdapters):
         self.sync = sync
         self.client = client
         self.cluster_filter = cluster_filter if cluster_filter else None
+
+    def load_hosts(self):
+        """Load host data from vSphere."""
+        for cluster in Cluster.objects.all():
+            hosts = self.client.get_host_from_cluster(cluster.name)
+            for host in hosts:
+                try:
+                    host_device = self.get_or_instantiate(
+                        self.diffsync_host,
+                        {"name": host["name"]},
+                        {"device_type": "VM Host"},
+                        {"device_role": "Hypervisor"},
+                    )
+                except Exception as err:
+                    self.job.log_warning(message=f"{err}")
 
     def load_cluster_groups(self):
         """Load Cluster Groups (DataCenters)."""

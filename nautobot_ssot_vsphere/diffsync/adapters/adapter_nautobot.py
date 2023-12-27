@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 from diffsync import DiffSync
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError, Q
+from nautobot.dcim.models import Device
 from nautobot.extras.models import Tag
 from nautobot.ipam.models import IPAddress
 from nautobot.virtualization.models import (
@@ -214,6 +215,17 @@ class NautobotDiffSync(DiffSyncModelAdapters):
                         message=f"{cluster_record}, is missing association to a Cluster Group. Please correct to ensure proper sync. `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` is enabled.",  # NOQA
                         obj=cluster_record,
                     )
+
+    def load_hosts(self, ssot_tag_slug="ssot-synced-from-vsphere"):
+        """Load VM Hosts."""
+        devices = Device.objects.filter(tags__slug=ssot_tag_slug)
+
+        for device in devices:
+            vm_host, _ = self.get_or_instantiate(
+                self.diffsync_host,
+                {"name": device.name},
+                {"device_type": device.device_type.model, "device_role": device.device_role.name},
+            )
 
     def load_data(self):
         """Add Nautobot Site objects as DiffSync Location models."""

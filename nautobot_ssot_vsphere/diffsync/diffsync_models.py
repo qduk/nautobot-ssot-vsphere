@@ -7,6 +7,7 @@ from django.db import IntegrityError
 from django.utils.text import slugify
 from nautobot.extras.models.statuses import Status
 from nautobot.ipam.models import IPAddress
+from nautobot.dcim.models import Device, DeviceRole, DeviceType
 from nautobot.virtualization.models import (
     Cluster,
     ClusterGroup,
@@ -393,6 +394,62 @@ class DiffSyncVirtualMachine(DiffSyncExtras):
             return super().update(attrs)
         except VirtualMachine.DoesNotExist:
             self.diffsync.job.log_warning(f"Unable to match VirtualMachine by name, {self.name}")
+
+class DiffSyncHost(DiffSyncExtras):
+    """Host DiffSync model."""
+
+    _modelname = "diffsync_host"
+    _identifiers = ("name",)
+    # Handle Hypervisors users that do not use clusters.
+    _attributes = ("device_role", "device_type")
+    _children = {}
+
+    name: str
+    device_role: str
+    device_type: str
+
+
+    @classmethod
+    def create(cls, diffsync, ids, attrs):
+        """Create VirtualMachine in Nautobot."""
+        try:
+            status = Status.objects.get(name="Active")
+            host_machine, _ = Device.objects.get_or_create(
+                name=ids["name"],
+                status=status,
+                device_role=DeviceRole.objects.get_or_create(name=attrs['device_role'])
+                device_type = DeviceType.objects.get_or_create(name=attrs['device_type'])
+            )
+            tag_object(host_machine)
+        except IntegrityError as error:
+            diffsync.job.log_warning(message=f"Host {ids['name']} already exists. {error}")
+        return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
+
+    def delete(self) -> Optional["DiffSyncModel"]:
+        """Delete Virtual Machine."""
+        try:
+            self.ordered_delete(Device.objects.get(name=self.name))
+            return self
+        except VirtualMachine.DoesNotExist:
+            self.diffsync.job.log_warning(f"Unable to match Host by name, {self.name}")
+
+    def update(self, attrs):
+        """Update Virtual Machine."""
+        try:
+            host_machine = Device.objects.get(name=self.name)
+            if attrs.get("device_type"):
+                host_device_type = DeviceType.objects.get(model=attrs.get("device_type"))
+                host_machine.device_type = host_device_type
+            if attrs.get("device_role"):
+                host_device_role = DeviceRole.objects.get(name=attrs.get("device_role"))
+                host_machine.device_role = host_device_role
+            # Tag and Update time stamp on object
+            tag_object(host_machine)
+            # Call the super().update() method to update the in-memory DiffSyncModel instance
+            return super().update(attrs)
+        except VirtualMachine.DoesNotExist:
+            self.diffsync.job.log_warning(f"Unable to match Host by name, {self.name}")
+
 
 
 if defaults.DEFAULT_USE_CLUSTERS:
