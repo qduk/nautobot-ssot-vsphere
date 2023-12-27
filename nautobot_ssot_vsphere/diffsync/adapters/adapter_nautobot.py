@@ -47,7 +47,7 @@ class NautobotDiffSync(DiffSyncModelAdapters):
         self.job = job
         self.sync = sync
         self.sync_vsphere_tagged_only = sync_vsphere_tagged_only
-        self.cluster_filter = cluster_filter
+        self.cluster_filter = cluster_filter if cluster_filter else None
 
     @transaction.atomic
     def sync_complete(self, source: DiffSync, *args, **kwargs):

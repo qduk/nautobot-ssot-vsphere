@@ -44,6 +44,7 @@ class VsphereDiffSync(DiffSyncModelAdapters):
         """Load host data from vSphere."""
         for cluster in Cluster.objects.all():
             hosts = self.client.get_host_from_cluster(cluster.name)
+            self.job.log_info(message=f"{hosts}")
             for host in hosts:
                 try:
                     host_device = self.get_or_instantiate(
