@@ -7,7 +7,7 @@ from django.db import IntegrityError
 from django.utils.text import slugify
 from nautobot.extras.models.statuses import Status
 from nautobot.ipam.models import IPAddress
-from nautobot.dcim.models import Device, DeviceRole, DeviceType
+from nautobot.dcim.models import Device, DeviceRole, DeviceType, Site
 from nautobot.virtualization.models import (
     Cluster,
     ClusterGroup,
@@ -18,7 +18,7 @@ from nautobot.virtualization.models import (
 from netutils.mac import is_valid_mac
 
 from nautobot_ssot_vsphere.diffsync import defaults
-from nautobot_ssot_vsphere.utilities import tag_object
+from nautobot_ssot_vsphere.utilities import tag_object, parse_name_for_site
 
 
 class DiffSyncExtras(DiffSyncModel):
@@ -82,13 +82,14 @@ class DiffSyncCluster(DiffSyncExtras):
     _modelname = "diffsync_cluster"
     _identifiers = ("name",)
     _attributes = ("cluster_type", "group")
-    _children = {"diffsync_virtual_machine": "virtualmachines"}
+    _children = {"diffsync_virtual_machine": "virtualmachines", "diffsync_host": "vm_hosts"}
 
     name: str
     cluster_type: str
     group: Optional[str]
 
     virtualmachines: List["DiffSyncVirtualMachine"] = list()  # pylint: disable=use-list-literal
+    vm_hosts: List["DiffSyncHost"] = list()  # pylint: disable=use-list-literal
 
     @classmethod
     def create(cls, diffsync, ids, attrs):
@@ -395,31 +396,50 @@ class DiffSyncVirtualMachine(DiffSyncExtras):
         except VirtualMachine.DoesNotExist:
             self.diffsync.job.log_warning(f"Unable to match VirtualMachine by name, {self.name}")
 
+
 class DiffSyncHost(DiffSyncExtras):
     """Host DiffSync model."""
 
     _modelname = "diffsync_host"
     _identifiers = ("name",)
     # Handle Hypervisors users that do not use clusters.
-    _attributes = ("device_role", "device_type")
+    if defaults.DEFAULT_USE_CLUSTERS:
+        _attributes = ("device_role", "device_type", "cluster")
+    else:
+        _attributes = ("device_role", "device_type")
     _children = {}
 
     name: str
     device_role: str
     device_type: str
-
+    cluster: Optional[str]
 
     @classmethod
     def create(cls, diffsync, ids, attrs):
-        """Create VirtualMachine in Nautobot."""
+        """Create Host in Nautobot."""
         try:
             status = Status.objects.get(name="Active")
-            host_machine, _ = Device.objects.get_or_create(
-                name=ids["name"],
-                status=status,
-                device_role=DeviceRole.objects.get_or_create(name=attrs['device_role'])
-                device_type = DeviceType.objects.get_or_create(name=attrs['device_type'])
+            device_t = DeviceType.objects.get(model=attrs["device_type"])
+            device_r = DeviceRole.objects.get(name=attrs["device_role"])
+            cluster = Cluster.objects.get(name=attrs["cluster"])
+            site_name = parse_name_for_site(ids["name"])
+            site = Site.objects.get(slug=site_name)
+            host_machine, created = Device.objects.update_or_create(
+                name__iexact=ids["name"],
+                defaults={
+                    "name": ids["name"],
+                    "status": status,
+                    "device_role": device_r,
+                    "device_type": device_t,
+                    "cluster": cluster,
+                    "site": site,
+                },
             )
+            # if created:
+            #     try:
+            #         host_machine.cluster = Cluster.objects.get(name=attrs["cluster"])
+            #     except Exception as err:
+            #         diffsync.job.log_info(message=f"Unable to assign device {host_machine} to cluster.")
             tag_object(host_machine)
         except IntegrityError as error:
             diffsync.job.log_warning(message=f"Host {ids['name']} already exists. {error}")
@@ -443,13 +463,14 @@ class DiffSyncHost(DiffSyncExtras):
             if attrs.get("device_role"):
                 host_device_role = DeviceRole.objects.get(name=attrs.get("device_role"))
                 host_machine.device_role = host_device_role
+            if attrs.get("cluster"):
+                host_machine.cluster = Cluster.objects.get(name=attrs.get("cluster"))
             # Tag and Update time stamp on object
             tag_object(host_machine)
             # Call the super().update() method to update the in-memory DiffSyncModel instance
             return super().update(attrs)
         except VirtualMachine.DoesNotExist:
             self.diffsync.job.log_warning(f"Unable to match Host by name, {self.name}")
-
 
 
 if defaults.DEFAULT_USE_CLUSTERS:

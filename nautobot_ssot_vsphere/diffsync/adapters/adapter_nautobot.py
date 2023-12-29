@@ -39,6 +39,7 @@ class NautobotDiffSync(DiffSyncModelAdapters):
         sync,
         sync_vsphere_tagged_only: bool,
         cluster_filter: Cluster,
+        only_hosts: bool,
         *args,
         **kwargs,
     ):
@@ -48,6 +49,7 @@ class NautobotDiffSync(DiffSyncModelAdapters):
         self.sync = sync
         self.sync_vsphere_tagged_only = sync_vsphere_tagged_only
         self.cluster_filter = cluster_filter if cluster_filter else None
+        self.only_hosts = only_hosts
 
     @transaction.atomic
     def sync_complete(self, source: DiffSync, *args, **kwargs):
@@ -139,6 +141,34 @@ class NautobotDiffSync(DiffSyncModelAdapters):
                 virtual_machines = VirtualMachine.objects.all()
         return virtual_machines
 
+    # TODO: (HUGO) Create a generic filtering func to repeat this logic for other objects
+    def get_initial_devices(self, ssot_tag: Tag):
+        """Identify the Devices objects based on user defined job inputs.
+
+        Args:
+            ssot_tag (Tag): Tag used for filtering
+        """
+        # Simple check / validate Tag is present.
+        if self.sync_vsphere_tagged_only:
+            self.job.log_debug(f"Filtering Devices by Tag `{ssot_tag.slug}`")
+            devices = Device.objects.filter(tags__slug=ssot_tag.slug)
+            self.job.log_debug(f"Found Devices by Tag {devices.count()}")
+            if self.cluster_filter:
+                self.job.log_debug(
+                    f"Filtering Devices by Tag `{ssot_tag.slug}` and Cluster `{self.cluster_filter.name}`"
+                )
+                devices = Device.objects.filter(Q(cluster=self.cluster_filter) & Q(tags__slug=ssot_tag.slug))
+                if not devices:
+                    self.job.log_warning(
+                        message=f"{self.cluster_filter.name} was used to filter, alongside SSoT Tag. {self.cluster_filter.name} is potentially not tagged. No objects found."  # NOQA
+                    )
+        elif not self.sync_vsphere_tagged_only:
+            if self.cluster_filter:
+                devices = Device.objects.filter(name=self.cluster_filter.name)
+            else:
+                devices = Device.objects.all()
+        return devices
+
     def load_virtual_machines(self, ssot_tag: Tag):
         """Load Nautobot Virtual Machines."""
         # Capture virtual machines with conditional logic based on user input | filters
@@ -216,16 +246,22 @@ class NautobotDiffSync(DiffSyncModelAdapters):
                         obj=cluster_record,
                     )
 
-    def load_hosts(self, ssot_tag_slug="ssot-synced-from-vsphere"):
+    def load_hosts(self, ssot_tag):
         """Load VM Hosts."""
-        devices = Device.objects.filter(tags__slug=ssot_tag_slug)
+        devices = self.get_initial_devices(ssot_tag)
 
         for device in devices:
-            vm_host, _ = self.get_or_instantiate(
+            diffsync_vm_host, _ = self.get_or_instantiate(
                 self.diffsync_host,
-                {"name": device.name},
-                {"device_type": device.device_type.model, "device_role": device.device_role.name},
+                {"name": device.name.lower()},
+                {
+                    "device_type": device.device_type.model,
+                    "device_role": device.device_role.name,
+                    "cluster": device.cluster.name,
+                },
             )
+            diffsync_cluster = self.get(self.diffsync_cluster, device.cluster.name)
+            diffsync_cluster.add_child(diffsync_vm_host)
 
     def load_data(self):
         """Add Nautobot Site objects as DiffSync Location models."""
@@ -237,7 +273,10 @@ class NautobotDiffSync(DiffSyncModelAdapters):
         # The number of Virtual Machines from vSphere coming into Nautobot.
         self.load_clusters(ssot_tag=ssot_tag)
         # Load Virtual Machine
-        self.load_virtual_machines(ssot_tag=ssot_tag)
+        if self.only_hosts:
+            self.load_hosts(ssot_tag=ssot_tag)
+        else:
+            self.load_virtual_machines(ssot_tag=ssot_tag)
 
     def load(self):
         """Load data from Nautobot."""

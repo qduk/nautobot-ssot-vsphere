@@ -12,6 +12,7 @@ class DiffSyncModelAdapters(DiffSync):
     diffsync_cluster = diffsync_models.DiffSyncCluster
     diffsync_vminterface = diffsync_models.DiffSyncVMInterface
     diffsync_ipaddress = diffsync_models.DiffSyncIpAddress
+    diffsync_host = diffsync_models.DiffSyncHost
 
     if defaults.DEFAULT_USE_CLUSTERS:
         if defaults.ENFORCE_CLUSTER_GROUP_TOP_LEVEL:

@@ -32,29 +32,34 @@ def get_disk_total(disks: List):
 class VsphereDiffSync(DiffSyncModelAdapters):
     """Nautobot adapter for DiffSync."""
 
-    def __init__(self, job, sync, client: VsphereClient, cluster_filter, *args, **kwargs):
+    def __init__(self, job, sync, client: VsphereClient, only_hosts, cluster_filter, *args, **kwargs):
         """Initialize the NautobotDiffSync."""
         super().__init__(*args, **kwargs)
         self.job = job
         self.sync = sync
         self.client = client
         self.cluster_filter = cluster_filter if cluster_filter else None
+        self.only_hosts = only_hosts
 
-    def load_hosts(self):
+    def load_hosts(self, cluster, diffsync_cluster):
         """Load host data from vSphere."""
-        for cluster in Cluster.objects.all():
-            hosts = self.client.get_host_from_cluster(cluster.name)
-            self.job.log_info(message=f"{hosts}")
-            for host in hosts:
+        cluster_resource_id_request = self.client.get_cluster_resource_id(cluster.get("cluster"))
+        cluster_resource_id = cluster_resource_id_request.json()["value"][0].get("cluster")
+        hosts = self.client.get_host_from_cluster(cluster_resource_id).json()["value"]
+        self.job.log_debug(message=f"Loading hosts for Cluster {cluster.get('name')}.")
+        for host in hosts:
+            try:
+                diffsync_host_device, _ = self.get_or_instantiate(
+                    self.diffsync_host,
+                    {"name": host["name"]},
+                    {"device_type": "ProLiant DL360", "device_role": "Hypervisor", "cluster": cluster.get("name")},
+                )
                 try:
-                    host_device = self.get_or_instantiate(
-                        self.diffsync_host,
-                        {"name": host["name"]},
-                        {"device_type": "VM Host"},
-                        {"device_role": "Hypervisor"},
-                    )
+                    diffsync_cluster.add_child(diffsync_host_device)
                 except Exception as err:
                     self.job.log_warning(message=f"{err}")
+            except Exception as err:
+                self.job.log_warning(message=f"{err}")
 
     def load_cluster_groups(self):
         """Load Cluster Groups (DataCenters)."""
@@ -223,12 +228,18 @@ class VsphereDiffSync(DiffSyncModelAdapters):
                     if defaults.ENFORCE_CLUSTER_GROUP_TOP_LEVEL:
                         cluster_group_parent.add_child(diffsync_cluster)
                     # Load virtual machines that belong to a cluster
-                    self.load_virtualmachines(cluster, diffsync_cluster)
+                    if self.only_hosts:
+                        self.load_hosts(cluster, diffsync_cluster)
+                    else:
+                        self.load_virtualmachines(cluster, diffsync_cluster)
                     break
                 if defaults.ENFORCE_CLUSTER_GROUP_TOP_LEVEL:
                     cluster_group_parent.add_child(diffsync_cluster)
-                # Load virtual machines that belong to a cluster
-                self.load_virtualmachines(cluster, diffsync_cluster)
+                # Load only hosts if `only_hosts` is set else load virtual machines.
+                if self.only_hosts:
+                    self.load_hosts(cluster, diffsync_cluster)
+                else:
+                    self.load_virtualmachines(cluster, diffsync_cluster)
 
     def load_standalone_vms(self):
         """Load all VM's from vSphere."""

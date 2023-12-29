@@ -57,6 +57,10 @@ class VsphereClient:
         url = requests.compat.urljoin(self.uri, path)
         return self.session.request(method, url, **kwargs)
 
+    def get_cluster_resource_id(self, cluster_name):
+        """Get ClusterComputeResource value from a given Cluster name."""
+        return self._request("GET", f"{self.uri}/rest/vcenter/cluster", params={"filter.clusters": [cluster_name]})
+
     def get_vms(self) -> Dict:
         """Get VMs."""
         return self._request("GET", f"{self.uri}/rest/vcenter/vm")

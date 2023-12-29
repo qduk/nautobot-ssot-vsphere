@@ -187,6 +187,17 @@ class VspherecDataSourceHosts(DataSource, Job):
     """Job syncing hosts from vSphere to Nautobot."""
 
     debug = BooleanVar(description="Enable for more verbose debug logging")
+    sync_vsphere_tagged_only = BooleanVar(
+        default=False,
+        label="Sync Tagged Only",
+        description="Only sync objects that have the 'ssot-synced-from-vsphere' tag.",
+    )
+    if defaults.DEFAULT_USE_CLUSTERS:
+        cluster_filter = OptionalObjectVar(
+            description="Only sync Nautobot records belonging to a single Cluster.",
+            model=Cluster,
+            required=False,
+        )
 
     class Meta:
         """Metadata about this Job."""
@@ -224,22 +235,40 @@ class VspherecDataSourceHosts(DataSource, Job):
         """Sync VM host data from vSphere into Nautobot."""
         dry_run = self.kwargs["dry_run"]
         debug_mode = self.kwargs["debug"]
+        tagged_only = self.kwargs["sync_vsphere_tagged_only"]
 
-        options = f"`Debug`: {debug_mode}, `Dry Run`: {dry_run}"  # NOQA
+        if defaults.DEFAULT_USE_CLUSTERS:
+            cluster_filter_object = (
+                Cluster.objects.get(pk=self.kwargs["cluster_filter"]) if self.kwargs["cluster_filter"] else None
+            )
+        else:
+            self.log_info(message="`DEFAULT_USE_CLUSTERS` is set to `False`")
+            if defaults.ENFORCE_CLUSTER_GROUP_TOP_LEVEL:
+                self.log_failure(message="Cannot `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` and disable `DEFAULT_USE_CLUSTERS`")
+                self.log_info(
+                    message="Set `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` to `False` or `DEFAULT_USE_CLUSTERS` to `True`"
+                )
+            cluster_filter_object = None
+
+        options = f"`Debug`: {debug_mode}, `Dry Run`: {dry_run}, `Only Hosts`: True, `Sync Tagged Only`: {tagged_only}"  # NOQA
         self.log_info(message=f"Starting job with the following options: {options}")
-        vsphere_source = VsphereDiffSync(job=self, sync=self.sync, client=VsphereClient())
+        vsphere_source = VsphereDiffSync(
+            job=self, sync=self.sync, client=VsphereClient(), cluster_filter=cluster_filter_object, only_hosts=True
+        )
 
         self.log_info(message="Loading current data from vSphere...")
-        vsphere_source.load_hosts()
+        vsphere_source.load()
 
         dest = NautobotDiffSync(
             job=self,
             sync=self.sync,
-            sync_vsphere_tagged_only=True,
+            sync_vsphere_tagged_only=tagged_only,
+            cluster_filter=cluster_filter_object,
+            only_hosts=True,
         )
 
         self.log_info(message="Loading current data from Nautobot...")
-        dest.load_hosts()
+        dest.load()
 
         self.log_info(message="Calculating diffs...")
         flags = DiffSyncFlags.CONTINUE_ON_FAILURE
