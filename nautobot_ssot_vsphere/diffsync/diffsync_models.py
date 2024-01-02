@@ -404,14 +404,15 @@ class DiffSyncHost(DiffSyncExtras):
     _identifiers = ("name",)
     # Handle Hypervisors users that do not use clusters.
     if defaults.DEFAULT_USE_CLUSTERS:
-        _attributes = ("device_role", "device_type", "cluster")
+        _attributes = ("device_role", "device_type", "site", "cluster")
     else:
-        _attributes = ("device_role", "device_type")
+        _attributes = ("device_role", "device_type", "site")
     _children = {}
 
     name: str
     device_role: str
     device_type: str
+    site: str
     cluster: Optional[str]
 
     @classmethod
@@ -422,8 +423,11 @@ class DiffSyncHost(DiffSyncExtras):
             device_t = DeviceType.objects.get(model=attrs["device_type"])
             device_r = DeviceRole.objects.get(name=attrs["device_role"])
             cluster = Cluster.objects.get(name=attrs["cluster"])
-            site_name = parse_name_for_site(ids["name"])
-            site = Site.objects.get(slug=site_name)
+            try:
+                site = Site.objects.get(slug=attrs["site"])
+            except Exception as err:
+                diffsync.job.log_warning(f"No site found for {attrs['site']}.")
+                return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
             host_machine, created = Device.objects.update_or_create(
                 name__iexact=ids["name"],
                 defaults={
@@ -435,11 +439,6 @@ class DiffSyncHost(DiffSyncExtras):
                     "site": site,
                 },
             )
-            # if created:
-            #     try:
-            #         host_machine.cluster = Cluster.objects.get(name=attrs["cluster"])
-            #     except Exception as err:
-            #         diffsync.job.log_info(message=f"Unable to assign device {host_machine} to cluster.")
             tag_object(host_machine)
         except IntegrityError as error:
             diffsync.job.log_warning(message=f"Host {ids['name']} already exists. {error}")

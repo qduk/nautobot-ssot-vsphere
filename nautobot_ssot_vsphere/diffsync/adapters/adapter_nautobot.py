@@ -258,6 +258,7 @@ class NautobotDiffSync(DiffSyncModelAdapters):
                     "device_type": device.device_type.model,
                     "device_role": device.device_role.name,
                     "cluster": device.cluster.name,
+                    "site": device.site.slug,
                 },
             )
             diffsync_cluster = self.get(self.diffsync_cluster, device.cluster.name)

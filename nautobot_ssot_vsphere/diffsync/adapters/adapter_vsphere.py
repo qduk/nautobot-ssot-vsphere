@@ -7,6 +7,7 @@ from typing import List
 from nautobot_ssot_vsphere.diffsync import defaults
 from nautobot_ssot_vsphere.diffsync.adapters.shared import DiffSyncModelAdapters
 from nautobot_ssot_vsphere.utilities.vsphere_client import VsphereClient
+from nautobot_ssot_vsphere.utilities import parse_name_for_site
 from nautobot.virtualization.models import (
     Cluster,
 )
@@ -49,10 +50,16 @@ class VsphereDiffSync(DiffSyncModelAdapters):
         self.job.log_debug(message=f"Loading hosts for Cluster {cluster.get('name')}.")
         for host in hosts:
             try:
+                site_name = parse_name_for_site(host["name"])
                 diffsync_host_device, _ = self.get_or_instantiate(
                     self.diffsync_host,
-                    {"name": host["name"]},
-                    {"device_type": "ProLiant DL360", "device_role": "Hypervisor", "cluster": cluster.get("name")},
+                    {"name": host["name"].lower()},
+                    {
+                        "device_type": "ProLiant DL360",
+                        "device_role": "Hypervisor",
+                        "cluster": cluster.get("name"),
+                        "site": site_name,
+                    },
                 )
                 try:
                     diffsync_cluster.add_child(diffsync_host_device)

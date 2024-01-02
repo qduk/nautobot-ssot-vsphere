@@ -192,12 +192,12 @@ class VspherecDataSourceHosts(DataSource, Job):
         label="Sync Tagged Only",
         description="Only sync objects that have the 'ssot-synced-from-vsphere' tag.",
     )
-    if defaults.DEFAULT_USE_CLUSTERS:
-        cluster_filter = OptionalObjectVar(
-            description="Only sync Nautobot records belonging to a single Cluster.",
-            model=Cluster,
-            required=False,
-        )
+    # if defaults.DEFAULT_USE_CLUSTERS:
+    #     cluster_filter = OptionalObjectVar(
+    #         description="Only sync Nautobot records belonging to a single Cluster.",
+    #         model=Cluster,
+    #         required=False,
+    #     )
 
     class Meta:
         """Metadata about this Job."""
