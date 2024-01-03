@@ -139,7 +139,7 @@ class VspherecDataSource(DataSource, Job):
         options = f"`Debug`: {debug_mode}, `Dry Run`: {dry_run}, `Sync Tagged Only`: {tagged_only}, `Cluster Filter`: {cluster_filter_object}"  # NOQA
         self.log_info(message=f"Starting job with the following options: {options}")
         vsphere_source = VsphereDiffSync(
-            job=self, sync=self.sync, client=VsphereClient(), cluster_filter=cluster_filter_object
+            job=self, sync=self.sync, client=VsphereClient(), cluster_filter=cluster_filter_object, only_hosts=False
         )
 
         self.log_info(message="Loading current data from vSphere...")
@@ -150,6 +150,7 @@ class VspherecDataSource(DataSource, Job):
             sync=self.sync,
             sync_vsphere_tagged_only=tagged_only,
             cluster_filter=cluster_filter_object,
+            only_hosts=False,
         )
 
         self.log_info(message="Loading current data from Nautobot...")
