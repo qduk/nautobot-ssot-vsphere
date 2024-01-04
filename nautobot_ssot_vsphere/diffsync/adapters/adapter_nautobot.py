@@ -197,17 +197,22 @@ class NautobotDiffSync(DiffSyncModelAdapters):
     def load_ipaddress(self, nautobot_vm_interface, diffsync_vminterface, diffsync_vm_object):
         """Load Interface IP Addresses."""
         for ip_address in nautobot_vm_interface.ip_addresses.all():
-            diffsync_ipaddress, _ = self.get_or_instantiate(
-                self.diffsync_ipaddress,
-                {"ip_address": ip_address.host, "prefix_length": ip_address.prefix_length},
-                {
-                    "state": ip_address.status.name,
-                    "mac_address": diffsync_vminterface.mac_address,
-                    "vm_interface_name": diffsync_vminterface.name,
-                    "vm_name": diffsync_vm_object.name,
-                },
-            )
-            diffsync_vminterface.add_child(diffsync_ipaddress)
+            try:
+                diffsync_ipaddress, _ = self.get_or_instantiate(
+                    self.diffsync_ipaddress,
+                    {"ip_address": ip_address.host, "prefix_length": ip_address.prefix_length},
+                    {
+                        "state": ip_address.status.name,
+                        "mac_address": diffsync_vminterface.mac_address,
+                        "vm_interface_name": diffsync_vminterface.name,
+                        "vm_name": diffsync_vm_object.name,
+                    },
+                )
+                diffsync_vminterface.add_child(diffsync_ipaddress)
+            except Exception as err:
+                self.job.log_warning(
+                    message=f"{err}, IP: {ip_address.host}, VM Interface Name: {diffsync_vminterface.name}"
+                )
 
     def load_vm_interfaces(self, nautobot_virtual_machine, diffsync_vm_object):
         """Load VM Interfaces."""
