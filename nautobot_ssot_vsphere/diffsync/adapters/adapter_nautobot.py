@@ -211,7 +211,7 @@ class NautobotDiffSync(DiffSyncModelAdapters):
                 diffsync_vminterface.add_child(diffsync_ipaddress)
             except Exception as err:
                 self.job.log_warning(
-                    message=f"{err}, IP: {ip_address.host}, VM Interface Name: {diffsync_vminterface.name}"
+                    message=f"{err}, IP: {ip_address.host}, VM Interface Name: {diffsync_vminterface.name}, Error: {err}"
                 )
 
     def load_vm_interfaces(self, nautobot_virtual_machine, diffsync_vm_object):
