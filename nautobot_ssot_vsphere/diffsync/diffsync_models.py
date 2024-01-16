@@ -189,7 +189,8 @@ class DiffSyncVMInterface(DiffSyncExtras):
                 name=self.name,
                 virtual_machine=VirtualMachine.objects.get(name=self.virtual_machine),
             )
-            vm_interface.enabled = attrs["enabled"]
+            if attrs.get("enabled"):
+                vm_interface.enabled = attrs["enabled"]
 
             if attrs.get("mac_address"):
                 vm_interface.mac_address = attrs["mac_address"]

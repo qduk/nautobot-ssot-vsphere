@@ -184,8 +184,10 @@ class NautobotDiffSync(DiffSyncModelAdapters):
                     "disk": virtual_machine.disk if virtual_machine.disk else None,
                     "status": virtual_machine.status.name,
                     "cluster": virtual_machine.cluster.name,
-                    "primary_ip4": virtual_machine.primary_ip4.host if bool(virtual_machine.primary_ip4) else None,
-                    "primary_ip6": virtual_machine.primary_ip6.host if bool(virtual_machine.primary_ip6) else None,
+                    "primary_ip4": None,
+                    "primary_ip6": None,
+                    # "primary_ip4": virtual_machine.primary_ip4.host if bool(virtual_machine.primary_ip4) else None,
+                    # "primary_ip6": virtual_machine.primary_ip6.host if bool(virtual_machine.primary_ip6) else None,
                 },
             )
             diffsync_cluster = self.get(self.diffsync_cluster, virtual_machine.cluster.name)
